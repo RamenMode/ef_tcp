@@ -21,6 +21,7 @@
 #include <etherfabric/capabilities.h>
 
 #include "utils.h"
+#include "pkt_headers.hpp"
 
 /* Hardware delivers at most ef_vi_receive_buffer_len() bytes to each
  * buffer (default 1792), and for best performance buffers should be
@@ -366,13 +367,13 @@ static int init(const char* intf, int vi_i)
     TRY(ef_memreg_alloc(&vi->memreg, vi->dh, &vi->pd, vi->dh,
                         pbs.mem, pbs.mem_size));
     for( i = 0; i < pbs.num; ++i ) {
-    struct pkt_buf* pkt_buf = pkt_buf_from_id(i);
-    pkt_buf->rx_ef_addr[vi_i] =
-        ef_memreg_dma_addr(&vi->memreg, i * PKT_BUF_SIZE) + RX_DMA_OFF
-        + addr_offset_from_id(i);
-    pkt_buf->tx_ef_addr[vi_i] =
-        ef_memreg_dma_addr(&vi->memreg, i * PKT_BUF_SIZE) + RX_DMA_OFF +
-        ef_vi_receive_prefix_len(&vi->vi) + addr_offset_from_id(i);
+      struct pkt_buf* pkt_buf = pkt_buf_from_id(i);
+      pkt_buf->rx_ef_addr[vi_i] =
+          ef_memreg_dma_addr(&vi->memreg, i * PKT_BUF_SIZE) + RX_DMA_OFF
+          + addr_offset_from_id(i);
+      pkt_buf->tx_ef_addr[vi_i] =
+          ef_memreg_dma_addr(&vi->memreg, i * PKT_BUF_SIZE) + RX_DMA_OFF +
+          ef_vi_receive_prefix_len(&vi->vi) + addr_offset_from_id(i);
     }
 
     /* Our pkt buffer allocation function makes assumptions on queue sizes */

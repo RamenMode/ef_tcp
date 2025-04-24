@@ -4,7 +4,6 @@ CXXFLAGS = -Wall -Wextra -Werror=format -std=c++17 -Iinclude -I$(HOME)/onload-9.
 LDFLAGS = -L$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul -lciul
 LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul
 NIC = enp1s0f1
-NIC2 = enp1s0f0
 
 # Directories
 SRC_DIR = src
@@ -20,8 +19,11 @@ TARGET = $(BIN_DIR)/program
 # Default target
 all: ./$(TARGET)
 
+gdb-run: all
+	sudo gdb -ex "set environment LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul" -ex "run $(NIC)" $(TARGET)
+
 run: all
-	sudo LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul ./$(TARGET) $(NIC) $(NIC2)
+	sudo LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul ./$(TARGET) $(NIC)
 
 # Link object files to create executable
 $(TARGET): $(OBJS)
