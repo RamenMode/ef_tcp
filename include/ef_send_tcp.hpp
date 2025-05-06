@@ -6,7 +6,9 @@
 #include "pkt_headers.hpp"
 #include <iostream>
 #include <tuple>
-
+#include <bitset>
+#include <chrono>
+#include <queue>
 #define PKT_BUF_SIZE 2048                                            // Size of each packet buffer
 #define RX_DMA_OFF ROUND_UP(sizeof(struct pkt_buf), EF_VI_DMA_ALIGN) // Offset of the RX DMA address
 #define RX_RING_SIZE 512                                             // Maximum number of receive requests in the RX ring
@@ -38,6 +40,13 @@ struct vi
     ef_memreg memreg;
     unsigned int tx_outstanding;
     uint64_t n_pkts;
+};
+
+class TcpResetException : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "TCP connection reset (RST received)";
+    }
 };
 /*
     This function returns a pointer to the packet buffer at index pkt_buf_i.
@@ -89,7 +98,7 @@ static int init(const char *intf);
 /*
     This function dumps the buffer.
 */
-void dump_buffer(const uint8_t *buf, size_t len);
+static void dump_buffer(const uint8_t *buf, size_t len);
 /**
  * @brief Send a packet with the given payload, payload length, flags, sequence number, and acknowledgment number and frees the buffer
  * Note: seq and ack are numbers to be sent with the packet
@@ -99,17 +108,59 @@ void dump_buffer(const uint8_t *buf, size_t len);
  * @param seq
  * @param ack
  */
-void send_packet(char *payload, int payload_len, uint8_t flags, uint32_t seq, uint32_t ack);
+static void send_packet(char *payload, int payload_len, uint8_t flags, uint32_t seq, uint32_t ack);
 /*
  * Receive a packet and verify the seq, ack, and flags are as expected
  */
-std::tuple<struct pkt_hdr *, uint32_t, uint8_t> receive_packet(uint8_t flags, uint32_t seq, uint32_t ack);
+static std::tuple<struct pkt_hdr *, uint32_t, uint8_t> receive_packet(uint8_t flags, uint32_t seq, uint32_t ack);
 /*
  * Send a connection handshake
  */
-void send_connection_handshake();
-
-
+static void send_connection_handshake();
+/*
+ * Send a TCP teardown
+ */
+static void send_tcp_teardown();
+/*
+ * Send a hello world packet
+ */
+static void send_hello_world();
+/*
+* Initialize the EF_VI TCP interface
+*/
+void ef_init_tcp_client();
+/*
+ * Connect to the server
+ */
+void ef_connect();
+/*
+ * Disconnect from the server
+ */
+void ef_disconnect();
+/*
+ * Read a packet
+ */
+ssize_t ef_read(char* buf, int count);
+/*
+ * Reset the variables
+ */
+void reset_variables();
+/*
+ * Send a reset
+ */
+static void send_reset();
+/*
+ * Send a packet
+ */
+ssize_t ef_send(char* buf, int len);
+/*
+ * Poll events for incoming packets when data is immediately wanted
+ */
+static void poll_events(char *buf, ssize_t& read, int len);
+/*
+ * Poll events for incoming packets when data is not immediately wanted
+ */
+static void poll_events();
 
 
 
