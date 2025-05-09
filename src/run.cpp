@@ -36,8 +36,8 @@ int main(int argc, char *argv[])
     while (true) {
         ssize_t bytes = ef_read(buf, 1500);
         if (bytes > 0) {
-            std::cout << buf;
             buf[bytes] = '\0';
+            std::cout << buf;
         }
     }
     ef_disconnect();
