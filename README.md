@@ -74,3 +74,4 @@ ifconfig
 - Allow for retransmissions
 - Congestion control
 - [Scatter Gather Sending](https://www.gnu.org/software/libc/manual/html_node/Scatter_002dGather.html)
+- Test Duplex Messaging
