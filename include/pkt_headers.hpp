@@ -13,6 +13,7 @@ enum class TCP_FLAGS: uint8_t {
     ACK = 0b00010000,
     FIN = 0b00000001,
     RST = 0b00000100,
+    PSH = 0b00001000,
 };
 
 struct eth_hdr

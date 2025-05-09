@@ -147,7 +147,6 @@ static int init()
     for (i = 0; i < pbs.num; ++i)
     {
         struct pkt_buf *pkt_buf = pkt_buf_from_id(i);
-        std::cout << "offset: " << RX_DMA_OFF + addr_offset_from_id(i) + ef_vi_receive_prefix_len(&vi.vi) << std::endl;
         pkt_buf->rx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE + RX_DMA_OFF + addr_offset_from_id(i));
         pkt_buf->tx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE + RX_DMA_OFF + ef_vi_receive_prefix_len(&vi.vi) + addr_offset_from_id(i));
     }
@@ -183,7 +182,6 @@ static void send_packet(char *payload, int payload_len, uint8_t flags, uint32_t 
     struct pkt_buf *pkt_buf = pbs.free_pool;
     pbs.free_pool = pbs.free_pool->next;
     --pbs.free_pool_n;
-    std::cout << "Sending packet with ID: " << pkt_buf->id << std::endl;
     // build packet
     build_tcp_packet(payload, payload_len, flags, seq, ack, (char *)pkt_buf + RX_DMA_OFF + addr_offset_from_id(pkt_buf->id) + ef_vi_receive_prefix_len(&vi.vi));
     // initialize transmit
@@ -204,17 +202,10 @@ static void verify_incoming_checksums(struct pkt_hdr *hdr)
     uint16_t tcpchecksum = ntohs(hdr->tcp.check);
     hdr->ip.check = 0;
     hdr->tcp.check = 0;
-    dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr) + ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4));
     assert(ip_checksum == compute_checksum((unsigned short *)&hdr->ip, ((hdr->ip.version_ihl & 0x0F) * 4)));
-    std::cout << "tcp checksum: " << tcpchecksum << std::endl;
-    std::cout << "lengths: " << ntohs(hdr->ip.tot_len) << "-" << (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) << "-" << (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4) << std::endl;
-    std::cout << "total length: " << ntohs(hdr->ip.tot_len) << std::endl;
-    std::cout << "computed tcp checksum: " << tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), ntohs(hdr->ip.tot_len)) << std::endl;
-    std::cout << "huh" << std::endl;
     assert(tcpchecksum == tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), ntohs(hdr->ip.tot_len)));
     hdr->ip.check = htons(ip_checksum);
     hdr->tcp.check = htons(tcpchecksum);
-    std::cout << "Verified checksums" << std::endl;
 }
 /*
  * Receive a packet and verify the seq, ack, and flags are as expected, but must free buffer after
@@ -231,18 +222,14 @@ static std::tuple<struct pkt_hdr *, uint32_t, uint8_t> receive_packet(uint8_t fl
             switch (EF_EVENT_TYPE(evs[i]))
             {
             case EF_EVENT_TYPE_TX:
-                std::cout << "Transmit completed successfully" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_WITH_TIMESTAMP:
-                std::cout << "Transmit completed successfully with timestamp" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_ERROR:
                 throw std::runtime_error("Transmit failed");
             case EF_EVENT_TYPE_RX:
             {
-                std::cout << "Received packet" << std::endl;
                 auto id = EF_EVENT_RX_RQ_ID(evs[i]);
-                std::cout << "ID: " << id << std::endl;
                 struct pkt_buf *pkt_buf = pkt_buf_from_id(id);
                 char *tcp_pkt = (char *)pkt_buf + RX_DMA_OFF + addr_offset_from_id(pkt_buf->id) + ef_vi_receive_prefix_len(&vi.vi);
                 struct pkt_hdr *hdr = (struct pkt_hdr *)tcp_pkt;
@@ -250,7 +237,6 @@ static std::tuple<struct pkt_hdr *, uint32_t, uint8_t> receive_packet(uint8_t fl
                 received_flags = received_flags | hdr->tcp.flags;
                 if ((received_flags & flags) == flags)
                 {
-                    dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr));
                     return std::make_tuple(hdr, (uint32_t)ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), id);
                 }
                 break;
@@ -274,31 +260,28 @@ static std::tuple<struct pkt_hdr *, uint32_t, uint8_t> receive_packet(uint8_t fl
 static void send_connection_handshake()
 {
     // Send SYN packet
-    std::cout << "Sending SYN packet ---------------" << std::endl;
     char *payload = NULL;
     uint32_t payload_len = 0;
     uint8_t flags = 0b00000010;
     send_packet(payload, payload_len, flags, snd_nxt, rcv_nxt);
 
     // handle SYN-ACK
-    std::cout << "Receiving SYN-ACK packet ---------------" << std::endl;
     flags = (uint8_t)TCP_FLAGS::SYN | (uint8_t)TCP_FLAGS::ACK;
-    std::cout << std::bitset<8>(flags) << std::endl;
     uint32_t s_seq = 0; // don't care
     uint32_t s_ack = snd_nxt + 1;
+    std::cout << "Trying to receive SYN-ACK" << std::endl;
     auto [tcp_pkt, len, id] = receive_packet(flags, s_seq, s_ack);
+    std::cout << "Received SYN-ACK" << std::endl;
     uint32_t server_seq = ntohl(tcp_pkt->tcp.seq_num); // this is the seq number of the server
     pkt_buf_free(pkt_buf_from_id(id));
     vi_refill_rx_ring();
-    std::cout << "Server seq: " << server_seq << std::endl;
+    std::cout << "Refilled RX ring" << std::endl;
     snd_nxt += 1;
     rcv_nxt = server_seq + 1;
 
     // send ACK
-    std::cout << "Sending ACK packet ---------------" << std::endl;
     flags = (uint8_t)TCP_FLAGS::ACK;
     snd_una = snd_nxt;
-    std::cout << "Sending ack" << rcv_nxt << std::endl;
     send_packet(payload, payload_len, flags, snd_nxt, rcv_nxt);
 
     // send_hello_world();
@@ -387,23 +370,15 @@ static void poll_events(char *buf, ssize_t &read, int len)
             switch (EF_EVENT_TYPE(evs[i]))
             {
             case EF_EVENT_TYPE_TX:
-                std::cout << "Transmit completed successfully" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_WITH_TIMESTAMP:
-                std::cout << "Transmit completed successfully with timestamp" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_ERROR:
                 throw std::runtime_error("Transmit failed");
             case EF_EVENT_TYPE_RX:
             {
                 auto id = EF_EVENT_RX_RQ_ID(evs[i]);
-                std::cout << "Received packet with ID: " << id << std::endl;
                 struct pkt_buf *pkt_buf = pkt_buf_from_id(id);
-                dump_buffer((const uint8_t *)pkt_buf, PKT_BUF_SIZE);
-                std::cout << "Big dump" << std::endl;
-                std::cout << "RX DMA OFF: " << RX_DMA_OFF << std::endl;
-                std::cout << "Addr offset: " << addr_offset_from_id(pkt_buf->id) << std::endl;
-                std::cout << "Receive prefix len: " << ef_vi_receive_prefix_len(&vi.vi) << std::endl;
                 uint32_t offset = RX_DMA_OFF + addr_offset_from_id(id) + ef_vi_receive_prefix_len(&vi.vi);
                 struct pkt_hdr *hdr = (struct pkt_hdr *)((char *)pkt_buf + offset);
                 verify_incoming_checksums(hdr);
@@ -459,7 +434,6 @@ static void poll_events(char *buf, ssize_t &read, int len)
                 {
                     throw std::runtime_error("Seeing packet from past, sender is retransmitting");
                 }
-                dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr));
                 if (len == read)
                 {
                     data_queue.push(std::make_tuple((char *)hdr + sizeof(struct pkt_hdr), pay_len, id));
@@ -510,10 +484,8 @@ static void poll_events()
             switch (EF_EVENT_TYPE(evs[i]))
             {
             case EF_EVENT_TYPE_TX:
-                std::cout << "Transmit completed successfully" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_WITH_TIMESTAMP:
-                std::cout << "Transmit completed successfully with timestamp" << std::endl;
                 break;
             case EF_EVENT_TYPE_TX_ERROR:
                 throw std::runtime_error("Transmit failed");
@@ -521,12 +493,8 @@ static void poll_events()
             {
                 auto id = EF_EVENT_RX_RQ_ID(evs[i]);
                 struct pkt_buf *pkt_buf = pkt_buf_from_id(id);
-                dump_buffer((const uint8_t *)pkt_buf, PKT_BUF_SIZE);
-                dump_buffer((const uint8_t *)pkt_buf + 64, PKT_BUF_SIZE - 64);
                 uint32_t offset = RX_DMA_OFF + addr_offset_from_id(id) + ef_vi_receive_prefix_len(&vi.vi);
                 struct pkt_hdr *hdr = (struct pkt_hdr *)((char *)pkt_buf + offset);
-                dump_buffer((const uint8_t *)hdr, sizeof(struct pkt_hdr));
-                std::cout << "BOOM" << std::endl;
                 verify_incoming_checksums(hdr);
                 if (hdr->tcp.flags & (uint8_t)TCP_FLAGS::RST)
                 {
@@ -580,7 +548,6 @@ static void poll_events()
                 {
                     throw std::runtime_error("Seeing packet from past, sender is retransmitting");
                 }
-                dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr));
                 data_queue.push(std::make_tuple((char *)hdr + sizeof(struct pkt_hdr), pay_len, id));
                 break;
             }
@@ -626,14 +593,12 @@ ssize_t ef_send(char *buf, int len)
     {
         throw std::runtime_error("Payload length too large");
     }
-    uint8_t flags = (uint8_t)TCP_FLAGS::ACK;
+    uint8_t flags = (uint8_t)TCP_FLAGS::ACK | (uint8_t)TCP_FLAGS::PSH;
     char *payload = buf;
     uint32_t payload_len = len;
     send_packet(payload, payload_len, flags, snd_nxt, rcv_nxt);
     snd_nxt += payload_len;
-    std::cout << "snd_nxt: " << snd_nxt << std::endl;
     poll_events();
-    std::cout << "rcv_nxt: " << rcv_nxt << std::endl;
     return 0;
 }
 

@@ -35,7 +35,6 @@ void compute_ip_checksum(struct ip_hdr *ip_hdr)
 
 uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, size_t total_len)
 {
-    std::cout << "================ CALCULATING CHECKSUM ==================" << std::endl;
     uint32_t sum = 0;
     const uint16_t *p;
     size_t len;
@@ -46,27 +45,17 @@ uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, size_t total_len)
     // Step 2: Sum TCP header
     p = (const uint16_t *)&pkt->tcp;
     len = (uint32_t)((pkt->tcp.data_off_reserved >> 4) * 4);
-    std::cout << "len: " << len << std::endl;
     while (len > 1)
     {
-        std::cout << "ntohs: " << std::hex << ntohs(*p) << std::endl;
         sum += ntohs(*p++);
         len -= 2;
     }
 
     // Step 3: Sum payload
     //dump_buffer((const uint8_t *)pkt, sizeof(struct pkt_hdr) + payload_len);
-    std::cout << std::dec;
-    std::cout << "payload len: " << payload_len << std::endl;
-    std::cout << "Trying to sum payload" << std::endl;
-    std::cout << "total len: " << total_len << std::endl;
-    std::cout << "offset: " << total_len - payload_len << std::endl;
-    std::cout << "pkt->ip.version_ihl: " << (pkt->ip.version_ihl & 0x0F) * 4 << std::endl;
-    std::cout << "pkt->tcp.data_off_reserved: " << (pkt->tcp.data_off_reserved >> 4) * 4 << std::endl;
     len = payload_len;
     while (len > 1)
     {
-        std::cout << "ntohs: " << std::hex << ntohs(*p) << std::endl;
         sum += ntohs(*p++);
         len -= 2;
     }
@@ -80,16 +69,10 @@ uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, size_t total_len)
     uint32_t dst = ntohl(pkt->ip.dst_addr);
 
     sum += (src >> 16) & 0xFFFF;
-    std::cout << "src: 0x" << std::hex << ((src >> 16) & 0xFFFF) << std::dec << std::endl;
     sum += src & 0xFFFF;
-    std::cout << "src: 0x" << std::hex << (src & 0xFFFF) << std::dec << std::endl;
     sum += (dst >> 16) & 0xFFFF;
-    std::cout << "dst: 0x" << std::hex << ((dst >> 16) & 0xFFFF) << std::dec << std::endl;
     sum += dst & 0xFFFF;
-    std::cout << "dst: 0x" << std::hex << (dst & 0xFFFF) << std::dec << std::endl;
 
-    std::cout << "protocol: 0x" << std::hex << (int)pkt->ip.protocol << std::dec << std::endl;
-    std::cout << "TCP length: 0x" << std::hex << 20 + payload_len << std::dec << std::endl;
     sum += pkt->ip.protocol;                     // protocol is 8 bits, promoted to 16
     sum += (uint32_t)((pkt->tcp.data_off_reserved >> 4) * 4) + payload_len; // TCP length
 
