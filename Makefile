@@ -1,8 +1,8 @@
 # Compiler and flags
 CXX = clang++
-CXXFLAGS = -Wall -Wextra -Werror=format -std=c++17 -Iinclude -I$(HOME)/onload-9.0.1.86/src/include/etherfabric 
-LDFLAGS = -L$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul -lciul
-LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul
+CXXFLAGS = -Wall -Wextra -Werror=format -std=c++17 -Iinclude -I/usr/include/etherfabric
+LD_LIBRARY_PATH=$(HOME)/usr/lib/x86_64-linux-gnu
+LDFLAGS = -L$(LD_LIBRARY_PATH) -lciul1
 NIC = enp1s0f1
 
 # Directories
@@ -20,10 +20,10 @@ TARGET = $(BIN_DIR)/program
 all: ./$(TARGET)
 
 gdb-run: all
-	sudo gdb -ex "set environment LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul" -ex "run $(NIC)" $(TARGET)
+	sudo gdb -ex "set environment LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)" -ex "run $(NIC)" $(TARGET)
 
 run: all
-	sudo LD_LIBRARY_PATH=$(HOME)/onload-9.0.1.86/build/gnu_x86_64/lib/ciul ./$(TARGET) $(NIC)
+	sudo LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) ./$(TARGET) $(NIC)
 
 # Link object files to create executable
 $(TARGET): $(OBJS)

@@ -19,7 +19,7 @@ struct eth_hdr
 {
     // swap the mac addresses
     uint8_t dst_mac[ETH_ALEN] = {0x00, 0x0f, 0x53, 0x4b, 0xe6, 0xb1}; /* Destination MAC address */
-    uint8_t src_mac[ETH_ALEN] = {0x00, 0x0f, 0x53, 0x59, 0xa5, 0xe1}; /* Source MAC address */
+    uint8_t src_mac[ETH_ALEN] = {0x00, 0x0f, 0x53, 0x5a, 0x4d, 0xa1}; /* Source MAC address */
     uint16_t ether_type = htons(ETH_P_IP);                            /* EtherType (e.g., ETH_P_IP) */
 } __attribute__((packed));
 
@@ -34,7 +34,7 @@ struct ip_hdr
     uint8_t ttl = 0x40;                               /* Time to Live */
     uint8_t protocol = IPPROTO_TCP;                   /* Protocol (e.g., IPPROTO_TCP) */
     uint16_t check = 0; /* Header Checksum */         // MODIFICATION
-    uint32_t src_addr = htonl(0xc0a80d15);            /* Source Address */
+    uint32_t src_addr = htonl(0xc0a80d17);            /* Source Address */
     uint32_t dst_addr = htonl(0xc0a80d0a);            /* Destination Address */
 } __attribute__((packed));
 
@@ -62,7 +62,9 @@ struct pkt_hdr
 /* Compute checksum for count bytes starting at addr, using one's complement of one's complement sum*/
 unsigned short compute_checksum(unsigned short *addr, unsigned int count);
 void compute_ip_checksum(struct ip_hdr *ip_hdr);
-uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, const char *payload);
+uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, size_t total_len);
+
+/**
 /**
  * Builds a TCP packet with the given payload and payload length.
  * The packet is built in the buffer passed as argument. The passed buffer is populated with the complete packet.

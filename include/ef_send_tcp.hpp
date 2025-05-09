@@ -19,9 +19,9 @@ struct pkt_buf
 {
     ef_addr rx_ef_addr;
     ef_addr tx_ef_addr;
-    int id;
+    int64_t id;
     struct pkt_buf *next;
-};
+} __attribute__((packed));
 
 struct pkt_bufs
 {
@@ -95,10 +95,6 @@ static int init_pkts_memory(void);
     It then returns 0.
 */
 static int init(const char *intf);
-/*
-    This function dumps the buffer.
-*/
-static void dump_buffer(const uint8_t *buf, size_t len);
 /**
  * @brief Send a packet with the given payload, payload length, flags, sequence number, and acknowledgment number and frees the buffer
  * Note: seq and ack are numbers to be sent with the packet
@@ -161,6 +157,8 @@ static void poll_events(char *buf, ssize_t& read, int len);
  * Poll events for incoming packets when data is not immediately wanted
  */
 static void poll_events();
+
+void dump_buffer(const uint8_t *buf, size_t len);
 
 
 

@@ -98,7 +98,7 @@ void set_variables()
 */
 static int init_pkts_memory(void)
 {
-    int i;
+    int64_t i;
     pbs.num = RX_RING_SIZE + TX_RING_SIZE;
     pbs.mem_size = pbs.num * PKT_BUF_SIZE;
     pbs.mem_size = ROUND_UP(pbs.mem_size, huge_page_size);
@@ -147,11 +147,9 @@ static int init()
     for (i = 0; i < pbs.num; ++i)
     {
         struct pkt_buf *pkt_buf = pkt_buf_from_id(i);
-        pkt_buf->rx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE) +
-                              RX_DMA_OFF + addr_offset_from_id(i);
-        pkt_buf->tx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE) +
-                              RX_DMA_OFF + ef_vi_receive_prefix_len(&vi.vi) +
-                              addr_offset_from_id(i);
+        std::cout << "offset: " << RX_DMA_OFF + addr_offset_from_id(i) + ef_vi_receive_prefix_len(&vi.vi) << std::endl;
+        pkt_buf->rx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE + RX_DMA_OFF + addr_offset_from_id(i));
+        pkt_buf->tx_ef_addr = ef_memreg_dma_addr(&vi.memreg, i * PKT_BUF_SIZE + RX_DMA_OFF + ef_vi_receive_prefix_len(&vi.vi) + addr_offset_from_id(i));
     }
 
     assert(ef_vi_receive_capacity(&vi.vi) == RX_RING_SIZE - 1);
@@ -163,23 +161,12 @@ static int init()
     // Set up filters to receive all TCP packets
     ef_filter_spec fs;
     ef_filter_spec_init(&fs, EF_FILTER_FLAG_NONE);
-    TRY(ef_filter_spec_set_ip4_full(&fs, IPPROTO_TCP, htonl(0xc0a80d15), htons(1234), htonl(0xc0a80d0a), htons(12345)));
+    TRY(ef_filter_spec_set_ip4_full(&fs, IPPROTO_TCP, htonl(0xc0a80d17), htons(1234), htonl(0xc0a80d0a), htons(12345)));
     TRY(ef_vi_filter_add(&vi.vi, vi.dh, &fs, NULL));
 
     return 0;
 }
 
-static void dump_buffer(const uint8_t *buf, size_t len)
-{
-    for (size_t i = 0; i < len; i++)
-    {
-        if (i % 16 == 0)
-            printf("%04zx: ", i);
-        printf("%02x ", buf[i]);
-        if (i % 16 == 15 || i == len - 1)
-            printf("\n");
-    }
-}
 /**
  * @brief Send a packet with the given payload, payload length, flags, sequence number, and acknowledgment number and frees the buffer
  * Note: seq and ack are numbers to be sent with the packet
@@ -215,18 +202,19 @@ static void verify_incoming_checksums(struct pkt_hdr *hdr)
 {
     uint16_t ip_checksum = ntohs(hdr->ip.check);
     uint16_t tcpchecksum = ntohs(hdr->tcp.check);
-    dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr));
     hdr->ip.check = 0;
     hdr->tcp.check = 0;
-    dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr));
-    dump_buffer((const uint8_t *)&hdr->ip, (size_t)sizeof(struct ip_hdr));
+    dump_buffer((const uint8_t *)hdr, (size_t)sizeof(struct pkt_hdr) + ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4));
     assert(ip_checksum == compute_checksum((unsigned short *)&hdr->ip, ((hdr->ip.version_ihl & 0x0F) * 4)));
     std::cout << "tcp checksum: " << tcpchecksum << std::endl;
     std::cout << "lengths: " << ntohs(hdr->ip.tot_len) << "-" << (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) << "-" << (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4) << std::endl;
-    std::cout << "computed tcp checksum: " << tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), NULL) << std::endl;
-    assert(tcpchecksum == tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), NULL));
+    std::cout << "total length: " << ntohs(hdr->ip.tot_len) << std::endl;
+    std::cout << "computed tcp checksum: " << tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), ntohs(hdr->ip.tot_len)) << std::endl;
+    std::cout << "huh" << std::endl;
+    assert(tcpchecksum == tcp_checksum(hdr, ntohs(hdr->ip.tot_len) - (uint32_t)((hdr->ip.version_ihl & 0x0F) * 4) - (uint32_t)((hdr->tcp.data_off_reserved >> 4) * 4), ntohs(hdr->ip.tot_len)));
     hdr->ip.check = htons(ip_checksum);
     hdr->tcp.check = htons(tcpchecksum);
+    std::cout << "Verified checksums" << std::endl;
 }
 /*
  * Receive a packet and verify the seq, ack, and flags are as expected, but must free buffer after
@@ -409,8 +397,15 @@ static void poll_events(char *buf, ssize_t &read, int len)
             case EF_EVENT_TYPE_RX:
             {
                 auto id = EF_EVENT_RX_RQ_ID(evs[i]);
+                std::cout << "Received packet with ID: " << id << std::endl;
                 struct pkt_buf *pkt_buf = pkt_buf_from_id(id);
-                struct pkt_hdr *hdr = (struct pkt_hdr *)(char *)pkt_buf + RX_DMA_OFF + addr_offset_from_id(pkt_buf->id) + ef_vi_receive_prefix_len(&vi.vi);
+                dump_buffer((const uint8_t *)pkt_buf, PKT_BUF_SIZE);
+                std::cout << "Big dump" << std::endl;
+                std::cout << "RX DMA OFF: " << RX_DMA_OFF << std::endl;
+                std::cout << "Addr offset: " << addr_offset_from_id(pkt_buf->id) << std::endl;
+                std::cout << "Receive prefix len: " << ef_vi_receive_prefix_len(&vi.vi) << std::endl;
+                uint32_t offset = RX_DMA_OFF + addr_offset_from_id(id) + ef_vi_receive_prefix_len(&vi.vi);
+                struct pkt_hdr *hdr = (struct pkt_hdr *)((char *)pkt_buf + offset);
                 verify_incoming_checksums(hdr);
                 if (hdr->tcp.flags & (uint8_t)TCP_FLAGS::RST)
                 {
@@ -653,3 +648,15 @@ if (EF_EVENT_TYPE(evs[i]) == EF_EVENT_TYPE_RX) {
         }
 
 */
+
+void dump_buffer(const uint8_t *buf, size_t len)
+{
+    for (size_t i = 0; i < len; i++)
+    {
+        if (i % 16 == 0)
+            printf("%04zx: ", i);
+        printf("%02x ", buf[i]);
+        if (i % 16 == 15 || i == len - 1)
+            printf("\n");
+    }
+}

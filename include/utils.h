@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /* X-SPDX-Copyright-Text: (c) Solarflare Communications Inc */
-#ifndef __UTILS_H__
-#define __UTILS_H__
-
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,5 +145,3 @@ extern int my_getaddrinfo(const char* host, const char* port,
                           struct addrinfo**ai_out);
 extern int parse_host(const char* s, struct in_addr* ip_out);
 extern int parse_interface(const char* s, int* ifindex_out);
-
-#endif  /* __UTILS_H__ */

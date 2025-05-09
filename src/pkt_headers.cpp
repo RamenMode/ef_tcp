@@ -33,8 +33,9 @@ void compute_ip_checksum(struct ip_hdr *ip_hdr)
     ip_hdr->check = compute_checksum((unsigned short *)ip_hdr, 20);
 }
 
-uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, const char *payload)
+uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, size_t total_len)
 {
+    std::cout << "================ CALCULATING CHECKSUM ==================" << std::endl;
     uint32_t sum = 0;
     const uint16_t *p;
     size_t len;
@@ -45,6 +46,7 @@ uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, const char *paylo
     // Step 2: Sum TCP header
     p = (const uint16_t *)&pkt->tcp;
     len = (uint32_t)((pkt->tcp.data_off_reserved >> 4) * 4);
+    std::cout << "len: " << len << std::endl;
     while (len > 1)
     {
         std::cout << "ntohs: " << std::hex << ntohs(*p) << std::endl;
@@ -53,7 +55,14 @@ uint16_t tcp_checksum(struct pkt_hdr *pkt, size_t payload_len, const char *paylo
     }
 
     // Step 3: Sum payload
-    p = (const uint16_t *)payload;
+    //dump_buffer((const uint8_t *)pkt, sizeof(struct pkt_hdr) + payload_len);
+    std::cout << std::dec;
+    std::cout << "payload len: " << payload_len << std::endl;
+    std::cout << "Trying to sum payload" << std::endl;
+    std::cout << "total len: " << total_len << std::endl;
+    std::cout << "offset: " << total_len - payload_len << std::endl;
+    std::cout << "pkt->ip.version_ihl: " << (pkt->ip.version_ihl & 0x0F) * 4 << std::endl;
+    std::cout << "pkt->tcp.data_off_reserved: " << (pkt->tcp.data_off_reserved >> 4) * 4 << std::endl;
     len = payload_len;
     while (len > 1)
     {
@@ -113,7 +122,7 @@ void build_tcp_packet(const char *payload, size_t payload_len, uint8_t flags, ui
     pkt_hdr.tcp.seq_num = htonl(seq);    // MANUAL
     pkt_hdr.tcp.ack_num = htonl(ack);    // MANUAL
     pkt_hdr.tcp.flags = flags;           // MANUAL
-    pkt_hdr.tcp.check = tcp_checksum(&pkt_hdr, payload_len, (char *)payload);
+    pkt_hdr.tcp.check = tcp_checksum(&pkt_hdr, payload_len, sizeof(struct pkt_hdr) + payload_len);
 
     std::cout << "TCP ACK NUM: " << ntohl(pkt_hdr.tcp.ack_num) << std::endl;
 
