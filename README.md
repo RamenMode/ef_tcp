@@ -4,7 +4,7 @@ EF_TCP is an implementation of TCP using Solarflare's Etherfabric Virtual Interf
 
 This also assumes a switch and computer setup operating on a local network which was from High Frequency Trading Technologies, Spring 2025 at the University of Notre Dame. It currently uses enp1s0f1 with port 1234 on hftt1 and enp1s0f1 with port 12345 on hftt0, but listens to mirroring on enp1s0f0 on the exchange server
 ### Usage
-The current supported functions are derived from the Berkeley (BSD) Sockets, which operate on **one** virtual interface
+The current supported functions are derived from the Berkeley (BSD) Sockets and operates on **one** virtual interface
 - An initialization function analogous to socket, through ef_init_tcp_client()
 - A "connect" function, through ef_connect();
 - A "send" function, through ef_send(char *buf, int len)
